@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VCF 9.1 Sizing Calculator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <div>
+          <p class="eyebrow">VCF 9.1 Planning</p>
+          <h1>Management Domain Sizing Calculator</h1>
+          <p class="intro">
+            Guided sizing for management-domain infrastructure, platform services,
+            workload-domain overhead, and protection blueprint requirements.
+          </p>
+        </div>
+        <div class="hero-meta">
+          <span>Workbook-aligned</span>
+          <strong>Management Domain Sizing</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="summary-band" aria-label="Sizing summary">
+        <article class="summary-metric">
+          <span>Total vCPU</span>
+          <strong id="totalCpu">0</strong>
+        </article>
+        <article class="summary-metric">
+          <span>Total Memory</span>
+          <strong id="totalRam">0 GB</strong>
+        </article>
+        <article class="summary-metric">
+          <span>Total Storage</span>
+          <strong id="totalDisk">0 GB</strong>
+        </article>
+        <article class="summary-metric accent">
+          <span>Management Hosts</span>
+          <strong id="hostCount">0</strong>
+        </article>
+      </section>
+
+      <section class="layout-band">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">1. Assumptions</p>
+              <h2>Cluster baseline</h2>
+            </div>
+          </div>
+          <div id="assumptionsForm" class="field-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">2. VCF Profile</p>
+              <h2>Deployment posture</h2>
+            </div>
+          </div>
+          <div id="profileForm" class="field-grid"></div>
+          <div id="warningList" class="warning-stack" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">3. Management Domain</p>
+            <h2>Core management components</h2>
+          </div>
+        </div>
+        <div id="managementForm" class="field-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">4. Platform Services</p>
+            <h2>Optional management services</h2>
+          </div>
+        </div>
+        <div id="servicesForm" class="field-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading with-action">
+          <div>
+            <p class="eyebrow">5. Workload Domains</p>
+            <h2>Additional workload-domain overhead</h2>
+          </div>
+          <button id="addDomainButton" type="button">Add domain</button>
+        </div>
+        <div id="domainCards" class="domain-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">6. Protection Blueprint</p>
+            <h2>Recovery-related capacity</h2>
+          </div>
+        </div>
+        <div id="protectionForm" class="field-grid"></div>
+      </section>
+
+      <section class="results-band">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Results</p>
+              <h2>Host-level summary</h2>
+            </div>
+          </div>
+          <div id="hostSummary" class="host-summary"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Breakdown</p>
+              <h2>Component requirements</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Nodes</th>
+                  <th>vCPU</th>
+                  <th>Memory</th>
+                  <th>Disk</th>
+                </tr>
+              </thead>
+              <tbody id="componentTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Details</p>
+            <h2>Expandable guidance</h2>
+          </div>
+        </div>
+        <div id="detailAccordions" class="accordion-stack"></div>
+      </section>
+    </main>
+
+    <script src="data/lookups.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
