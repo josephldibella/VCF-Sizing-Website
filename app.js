@@ -687,18 +687,14 @@ function calculate() {
   const nMinusOneHosts = Math.max(hostCount - 1, 1);
   const cpuPerHost = Math.ceil(totals.cpu / nMinusOneHosts / state.assumptions.cpuOversub);
   const ramPerHost = Math.ceil(totals.ram / nMinusOneHosts / state.assumptions.ramOversub);
-  const interimStorage = totals.disk;
-  const redundantStorage = Math.ceil(
-    (state.assumptions.storageType === "vSAN-ESA" ? interimStorage * 1.5 : interimStorage * 2),
-  );
-  const reservedStorage = Math.ceil(interimStorage * (1 + state.assumptions.reservePct / 100));
-  const growthStorage = Math.ceil(
-    (state.assumptions.storageType === "FC" || state.assumptions.storageType === "NFS"
-      ? interimStorage
-      : redundantStorage * (1 + state.assumptions.reservePct / 100)) *
-      (1 + state.assumptions.growthPct / 100),
-  );
-  const storagePerHost = Math.ceil(growthStorage / nMinusOneHosts);
+  const storageSummary = window.VCF_STORAGE.calculateStorageRequirements({
+    vmCapacity: totals.disk,
+    swapFile: totals.ram,
+    storageType: state.assumptions.storageType,
+    reservePct: state.assumptions.reservePct,
+    growthPct: state.assumptions.growthPct,
+    hostCount,
+  });
 
   return {
     rows,
@@ -709,11 +705,7 @@ function calculate() {
       hostCount,
       cpuPerHost,
       ramPerHost,
-      interimStorage,
-      redundantStorage,
-      reservedStorage,
-      growthStorage,
-      storagePerHost,
+      ...storageSummary,
     },
   };
 }
@@ -923,11 +915,13 @@ function renderResults(result) {
     { label: "Hosts required", value: formatNumber(result.hostSummary.hostCount) },
     { label: "CPU per host (N-1)", value: `${formatNumber(result.hostSummary.cpuPerHost)} CPUs` },
     { label: "Memory per host (N-1)", value: formatGb(result.hostSummary.ramPerHost) },
-    { label: "Interim VM capacity", value: formatGb(result.hostSummary.interimStorage) },
-    { label: "Redundancy-adjusted storage", value: formatGb(result.hostSummary.redundantStorage) },
-    { label: "Reserve-adjusted storage", value: formatGb(result.hostSummary.reservedStorage) },
-    { label: "Growth-adjusted storage", value: formatGb(result.hostSummary.growthStorage) },
-    { label: "Storage per host (N-1)", value: formatGb(result.hostSummary.storagePerHost) },
+    { label: "Virtual Machine Capacity Requirements", value: formatGb(result.hostSummary.vmCapacity) },
+    { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile) },
+    { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage) },
+    { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage) },
+    { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage) },
+    { label: "Allow for Estimated Growth", value: formatGb(result.hostSummary.growthStorage) },
+    { label: "Storage per Host (based on N-1 hosts)", value: formatGb(result.hostSummary.storagePerHost) },
   ]
     .map(
       (item) => `
