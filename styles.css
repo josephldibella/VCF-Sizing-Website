@@ -280,6 +280,19 @@ select {
   line-height: 1.4;
 }
 
+.required-status {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b9ddc8;
+  border-radius: 8px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
 .domain-list {
   display: grid;
   gap: 12px;
@@ -445,6 +458,25 @@ details ul {
   color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.5;
+}
+
+.reset-band {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.reset-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.reset-button:hover,
+.reset-button:focus-visible {
+  border-color: #1859bd;
+  background: #1859bd;
 }
 
 @media (max-width: 1100px) {

@@ -8,9 +8,13 @@ const DESCRIPTIONS = {
   memoryOversubscription:
     "The ratio of virtual machine memory demand to physical host memory used for host sizing. The workbook permits up to 2:1 and recommends adding capacity if sustained contention occurs.",
   vcfProfileSize:
-    "Selects the predefined appliance and VCF services runtime sizing associated with the deployment posture. Workbook guidance maps Simple deployments to Small and High Availability deployments to Medium or Large.",
+    "A VCF profile is a predefined platform footprint that aligns the VCF services runtime topology and appliance capacity with the scale and availability required by the deployment.",
   managementSsp:
-    "Sizes the management-domain Security Services Platform. A selected size includes the SSP installer, control-plane or controller nodes, worker nodes, and licensing-hub resources defined by the workbook.",
+    "The Security Services Platform runs VMware vDefend capabilities such as security posture analytics, Security Intelligence, Network Detection and Response, and Malware Prevention. Add it when the VCF stack needs centralized advanced threat visibility and protection for an NSX Manager environment.",
+  nsxEdgeOrVna:
+    "Add NSX Edge when workloads require north-south routing or centralized network services. Add a Virtual Network Appliance for stateful services such as NAT in distributed VPC designs where those services cannot run directly on the hypervisors.",
+  nsxGlobalManager:
+    "NSX Global Manager provides centralized management of global network segments and firewall policy across federated NSX environments. Add it when consistent networking and security policy must span multiple VCF instances or sites.",
   realTimeMetrics:
     "Enables real-time data collection within the VCF services runtime. The workbook sizes the required runtime resources without deploying a separate real-time metrics appliance.",
   softwareDepot:
@@ -55,53 +59,56 @@ const elements = {
   totalDisk: document.querySelector("#totalDisk"),
   hostCount: document.querySelector("#hostCount"),
   addDomainButton: document.querySelector("#addDomainButton"),
+  resetButton: document.querySelector("#resetButton"),
 };
 
-const state = {
-  assumptions: {
-    reservePct: 30,
-    growthPct: 10,
-    hostCores: 128,
-    hostRam: 1024,
-    cpuOversub: 1,
-    ramOversub: 1,
-    storageType: "vSAN-ESA",
-  },
-  instance: {
-    model: "First Instance",
-    deploymentModel: "High Availability",
-    deploymentSize: "Medium",
-  },
-  management: {
-    customProfile: false,
-    vcenterSize: "Medium",
-    vcenterStorage: "Large",
-    nsxModel: "Mandatory - HA Cluster",
-    nsxSize: "Medium",
-    edgeSize: "Excluded",
-    gmSize: "Excluded",
-    aviSize: "Excluded",
-    sspSize: "Excluded",
-  },
-  services: {
-    vcfOperations: "Exclude",
-    cloudProxy: "Exclude",
-    vcfAutomation: "Exclude",
-    logManagement: "Exclude",
-    logReplicas: 3,
-    networkOperations: "Exclude",
-    realTimeMetrics: "Exclude",
-    softwareDepot: "Exclude",
-    identityBroker: "Exclude",
-  },
-  protection: {
-    sprMode: "Exclude",
-    mgmtSrmSize: "Standard",
-    workloadSrmSize: "Standard",
-    ransomwareRecovery: "Exclude",
-  },
-  workloadDomains: [createDomain(1)],
-};
+function createDefaultState() {
+  return {
+    assumptions: {
+      reservePct: 30,
+      growthPct: 10,
+      hostCores: 128,
+      hostRam: 1024,
+      cpuOversub: 1,
+      ramOversub: 1,
+      storageType: "vSAN-ESA",
+    },
+    instance: {
+      model: "First Instance",
+      deploymentModel: "High Availability",
+      deploymentSize: "Medium",
+    },
+    management: {
+      customProfile: false,
+      vcenterSize: "Medium",
+      vcenterStorage: "Large",
+      nsxModel: "Mandatory - HA Cluster",
+      nsxSize: "Medium",
+      edgeSize: "Excluded",
+      gmSize: "Excluded",
+      aviSize: "Excluded",
+      sspSize: "Excluded",
+    },
+    services: {
+      vcfAutomation: "Exclude",
+      logManagement: "Exclude",
+      logReplicas: 3,
+      networkOperations: "Exclude",
+      realTimeMetrics: "Exclude",
+      softwareDepot: "Exclude",
+      identityBroker: "Exclude",
+    },
+    protection: {
+      sprMode: "Exclude",
+      mgmtSrmSize: "Standard",
+      workloadSrmSize: "Standard",
+      ransomwareRecovery: "Exclude",
+    },
+    workloadDomains: [createDomain(1)],
+  };
+}
+
+const state = createDefaultState();
 
 function createDomain(index) {
   return {
@@ -259,6 +266,10 @@ function calculate() {
   const warnings = [];
   const mgmt = currentManagementProfile();
   const services = state.services;
+  const requiredServices = window.VCF_CORE_SERVICES.requiredCoreServices({
+    instanceModel: state.instance.model,
+    deploymentModel: state.instance.deploymentModel,
+  });
   const selectedDomains = selectedWorkloadDomains();
   const protection = protectionFlags();
 
@@ -271,13 +282,6 @@ function calculate() {
     state.instance.deploymentSize === "Small"
   ) {
     warnings.push("High Availability deployment should use size Medium or Large.");
-  }
-
-  if (
-    state.instance.model === "Additional Instance" &&
-    services.vcfOperations === "Include"
-  ) {
-    warnings.push("VCF Operations should remain excluded for an additional instance.");
   }
 
   if (
@@ -520,7 +524,7 @@ function calculate() {
 
   let vcfOpsNodes = 0;
   let vcfOpsApplianceSize = null;
-  if (services.vcfOperations === "Include") {
+  if (requiredServices.vcfOperations) {
     vcfOpsNodes = deploymentModel === "High Availability" ? 3 : deploymentModel === "Simple" ? 1 : 0;
     if (deploymentModel === "High Availability" && profileSize === "Medium") {
       vcfOpsApplianceSize = "Large";
@@ -540,7 +544,7 @@ function calculate() {
     ),
   );
 
-  const cloudProxyNodes = services.cloudProxy === "Include" ? 1 : 0;
+  const cloudProxyNodes = requiredServices.cloudProxy ? 1 : 0;
   rows.push(
     component(
       "Cloud Proxy",
@@ -551,7 +555,7 @@ function calculate() {
     ),
   );
 
-  const licenseServerNodes = instanceModel === "Additional Instance" || services.vcfOperations === "Exclude" ? 0 : 1;
+  const licenseServerNodes = requiredServices.vcfOperations ? 1 : 0;
   rows.push(component("License Server", licenseServerNodes, licenseServerNodes * 2, licenseServerNodes * 4, licenseServerNodes * 12));
 
   const automationNodes = services.vcfAutomation === "Include"
@@ -752,6 +756,16 @@ function infoLabel(label, description = "") {
 }
 
 function fieldTemplate({ label, path, value, type = "text", options = [], note = "", description = "" }) {
+  if (type === "status") {
+    return `
+      <div class="field">
+        <div class="field-label">${infoLabel(label, description)}</div>
+        <div class="required-status">${value}</div>
+        ${note ? `<small>${note}</small>` : ""}
+      </div>
+    `;
+  }
+
   if (type === "select") {
     return `
       <div class="field">
@@ -815,7 +829,32 @@ function renderProfile(warnings) {
 function renderManagement() {
   const recommended = recommendedManagementProfile();
   const profile = currentManagementProfile();
+  const requiredServices = window.VCF_CORE_SERVICES.requiredCoreServices({
+    instanceModel: state.instance.model,
+    deploymentModel: state.instance.deploymentModel,
+  });
+  const deploymentExcluded = state.instance.deploymentModel === "Exclude";
   elements.managementForm.innerHTML = [
+    fieldTemplate({
+      label: "VCF Operations",
+      value: deploymentExcluded
+        ? "Not sized"
+        : requiredServices.vcfOperations
+          ? "Included - Required"
+          : "Uses fleet VCF Operations",
+      type: "status",
+      note: deploymentExcluded
+        ? "Select a deployment model to size the required core services."
+        : requiredServices.vcfOperations
+          ? "A new VCF Operations deployment is included with the first VCF instance."
+          : "Additional instances connect to the VCF Operations deployment for the existing fleet.",
+    }),
+    fieldTemplate({
+      label: "Cloud Proxy",
+      value: requiredServices.cloudProxy ? "Included - Required" : "Not sized",
+      type: "status",
+      note: "Each deployed VCF instance requires a Cloud Proxy for data collection and management services.",
+    }),
     fieldTemplate({
       label: "Customize management profile",
       path: "management.customProfile",
@@ -861,6 +900,7 @@ function renderManagement() {
       value: state.management.edgeSize,
       type: "select",
       options: LOOKUPS.lists.sizing_nsxt_edge_sizing_list,
+      description: DESCRIPTIONS.nsxEdgeOrVna,
     }),
     fieldTemplate({
       label: "NSX global manager size",
@@ -868,6 +908,7 @@ function renderManagement() {
       value: state.management.gmSize,
       type: "select",
       options: OPTIONS.gmOptions,
+      description: DESCRIPTIONS.nsxGlobalManager,
     }),
     fieldTemplate({
       label: "Management AVI load balancer",
@@ -889,8 +930,6 @@ function renderManagement() {
 
 function renderServices() {
   elements.servicesForm.innerHTML = [
-    fieldTemplate({ label: "VCF Operations", path: "services.vcfOperations", value: state.services.vcfOperations, type: "select", options: OPTIONS.includeExclude }),
-    fieldTemplate({ label: "Cloud Proxy", path: "services.cloudProxy", value: state.services.cloudProxy, type: "select", options: OPTIONS.includeExclude }),
     fieldTemplate({ label: "VCF Automation", path: "services.vcfAutomation", value: state.services.vcfAutomation, type: "select", options: OPTIONS.includeExclude }),
     fieldTemplate({ label: "Log Management size", path: "services.logManagement", value: state.services.logManagement, type: "select", options: OPTIONS.logsSizes }),
     fieldTemplate({ label: "Log replicas", path: "services.logReplicas", value: state.services.logReplicas, type: "number", note: "Used when Log Management is enabled." }),
@@ -1127,6 +1166,14 @@ elements.addDomainButton.addEventListener("click", () => {
     return;
   }
   state.workloadDomains.push(createDomain(state.workloadDomains.length + 1));
+  render();
+});
+
+elements.resetButton.addEventListener("click", () => {
+  Object.keys(state).forEach((key) => {
+    delete state[key];
+  });
+  Object.assign(state, createDefaultState());
   render();
 });
 
