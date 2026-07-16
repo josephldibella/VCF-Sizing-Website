@@ -314,6 +314,14 @@ select {
   padding: 14px;
 }
 
+.domain-card-disabled {
+  background: #f1f3f6;
+}
+
+.domain-card-disabled .domain-grid .field:not(:first-child) {
+  opacity: 0.72;
+}
+
 .domain-head {
   display: flex;
   justify-content: space-between;
@@ -390,6 +398,25 @@ select {
   font-size: 1.2rem;
 }
 
+.summary-item-inactive {
+  border-color: #dfe3e8;
+  background: #e7eaee;
+  color: #6f7884;
+}
+
+.summary-item-inactive span,
+.summary-item-inactive strong,
+.summary-item-inactive small {
+  color: #6f7884;
+}
+
+.summary-item-inactive small {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -411,6 +438,15 @@ td {
 th {
   color: var(--muted);
   font-size: 0.8rem;
+  font-weight: 800;
+}
+
+tfoot th,
+tfoot td {
+  border-top: 2px solid var(--line);
+  border-bottom: 0;
+  background: var(--surface-alt);
+  color: var(--ink);
   font-weight: 800;
 }
 

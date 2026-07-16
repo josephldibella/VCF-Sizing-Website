@@ -55,6 +55,7 @@ const elements = {
   domainCards: document.querySelector("#domainCards"),
   warningList: document.querySelector("#warningList"),
   componentTable: document.querySelector("#componentTable"),
+  componentTotals: document.querySelector("#componentTotals"),
   hostSummary: document.querySelector("#hostSummary"),
   detailAccordions: document.querySelector("#detailAccordions"),
   totalCpu: document.querySelector("#totalCpu"),
@@ -805,7 +806,7 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
       <div class="field">
         <div class="field-label">${infoLabel(label, description)}</div>
         <label class="checkbox-row">
-          <input aria-label="${label}" type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} />
+          <input aria-label="${label}" type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} ${disabled ? "disabled" : ""} />
           <span>${value ? "Enabled" : "Disabled"}</span>
         </label>
         ${note ? `<small>${note}</small>` : ""}
@@ -816,7 +817,7 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
   return `
     <div class="field">
       <div class="field-label">${infoLabel(label, description)}</div>
-      <input aria-label="${label}" type="number" data-path="${path}" data-type="number" value="${value}" />
+      <input aria-label="${label}" type="number" data-path="${path}" data-type="number" value="${value}" ${disabled ? "disabled" : ""} />
       ${note ? `<small>${note}</small>` : ""}
     </div>
   `;
@@ -994,7 +995,7 @@ function renderDomains() {
   elements.domainCards.innerHTML = state.workloadDomains
     .map((domain, index) => {
       return `
-        <article class="domain-card">
+        <article class="domain-card ${domain.included ? "" : "domain-card-disabled"}">
           <div class="domain-head">
             <div class="domain-title">
               <strong>${domain.id}</strong>
@@ -1007,15 +1008,15 @@ function renderDomains() {
           </div>
           <div class="domain-grid">
             ${fieldTemplate({ label: "Include domain", path: `workloadDomains.${index}.included`, value: domain.included, type: "checkbox" })}
-            ${fieldTemplate({ label: "vCenter size", path: `workloadDomains.${index}.vcenterSize`, value: domain.vcenterSize, type: "select", options: LOOKUPS.lists.sizing_vcenter_appliance_size_list })}
-            ${fieldTemplate({ label: "vCenter storage", path: `workloadDomains.${index}.vcenterStorage`, value: domain.vcenterStorage, type: "select", options: OPTIONS.vcenterStorageSizes })}
-            ${fieldTemplate({ label: "NSX model", path: `workloadDomains.${index}.nsxModel`, value: domain.nsxModel, type: "select", options: OPTIONS.workloadNsxModels })}
-            ${fieldTemplate({ label: "NSX size", path: `workloadDomains.${index}.nsxSize`, value: domain.nsxSize, type: "select", options: LOOKUPS.lists.sizing_nsxt_manager_size_list })}
-            ${fieldTemplate({ label: "Global manager", path: `workloadDomains.${index}.gmChoice`, value: domain.gmChoice, type: "select", options: OPTIONS.workloadGmOptions })}
-            ${fieldTemplate({ label: "Global manager size", path: `workloadDomains.${index}.gmSize`, value: domain.gmSize, type: "select", options: OPTIONS.gmOptions })}
-            ${fieldTemplate({ label: "Protection on this domain", path: `workloadDomains.${index}.sprInclude`, value: domain.sprInclude, type: "checkbox" })}
-            ${fieldTemplate({ label: "AVI load balancer", path: `workloadDomains.${index}.aviSize`, value: domain.aviSize, type: "select", options: OPTIONS.aviSizes })}
-            ${fieldTemplate({ label: "Security Services Platform", path: `workloadDomains.${index}.sspSize`, value: domain.sspSize, type: "select", options: OPTIONS.sspSizes })}
+            ${fieldTemplate({ label: "vCenter size", path: `workloadDomains.${index}.vcenterSize`, value: domain.vcenterSize, type: "select", options: LOOKUPS.lists.sizing_vcenter_appliance_size_list, disabled: !domain.included })}
+            ${fieldTemplate({ label: "vCenter storage", path: `workloadDomains.${index}.vcenterStorage`, value: domain.vcenterStorage, type: "select", options: OPTIONS.vcenterStorageSizes, disabled: !domain.included })}
+            ${fieldTemplate({ label: "NSX model", path: `workloadDomains.${index}.nsxModel`, value: domain.nsxModel, type: "select", options: OPTIONS.workloadNsxModels, disabled: !domain.included })}
+            ${fieldTemplate({ label: "NSX size", path: `workloadDomains.${index}.nsxSize`, value: domain.nsxSize, type: "select", options: LOOKUPS.lists.sizing_nsxt_manager_size_list, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Global manager", path: `workloadDomains.${index}.gmChoice`, value: domain.gmChoice, type: "select", options: OPTIONS.workloadGmOptions, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Global manager size", path: `workloadDomains.${index}.gmSize`, value: domain.gmSize, type: "select", options: OPTIONS.gmOptions, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Protection on this domain", path: `workloadDomains.${index}.sprInclude`, value: domain.sprInclude, type: "checkbox", disabled: !domain.included })}
+            ${fieldTemplate({ label: "AVI load balancer", path: `workloadDomains.${index}.aviSize`, value: domain.aviSize, type: "select", options: OPTIONS.aviSizes, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Security Services Platform", path: `workloadDomains.${index}.sspSize`, value: domain.sspSize, type: "select", options: OPTIONS.sspSizes, disabled: !domain.included })}
           </div>
         </article>
       `;
@@ -1029,6 +1030,7 @@ function renderResults(result) {
   elements.totalDisk.textContent = formatGb(result.totals.disk);
   elements.hostCount.textContent = formatNumber(result.hostSummary.hostCount);
 
+  const externalStorage = state.assumptions.storageType === "FC" || state.assumptions.storageType === "NFS";
   elements.hostSummary.innerHTML = [
     { label: "Hosts required", value: formatNumber(result.hostSummary.hostCount) },
     { label: "CPU per host (N-1)", value: `${formatNumber(result.hostSummary.cpuPerHost)} CPUs` },
@@ -1036,16 +1038,17 @@ function renderResults(result) {
     { label: "Virtual Machine Capacity Requirements", value: formatGb(result.hostSummary.vmCapacity) },
     { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile), description: DESCRIPTIONS.swapFile },
     { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage), description: DESCRIPTIONS.interimStorage },
-    { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage) },
-    { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage) },
+    { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage), inactive: externalStorage },
+    { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage), inactive: externalStorage },
     { label: "Allow for Estimated Growth", value: formatGb(result.hostSummary.growthStorage) },
-    { label: "Storage per Host (based on N-1 hosts)", value: formatGb(result.hostSummary.storagePerHost) },
+    { label: "Storage per Host (based on N-1 hosts)", value: formatGb(result.hostSummary.storagePerHost), inactive: externalStorage },
   ]
     .map(
       (item) => `
-        <div class="summary-item">
+        <div class="summary-item ${item.inactive ? "summary-item-inactive" : ""}" ${item.inactive ? 'aria-label="Not applicable to FC or NFS storage"' : ""}>
           ${infoLabel(item.label, item.description)}
           <strong>${item.value}</strong>
+          ${item.inactive ? "<small>Not applied to FC or NFS storage</small>" : ""}
         </div>
       `,
     )
@@ -1065,6 +1068,14 @@ function renderResults(result) {
       `,
     )
     .join("");
+
+  elements.componentTotals.innerHTML = `
+    <th scope="row">Totals</th>
+    <td>${formatNumber(result.totals.nodes)}</td>
+    <td>${formatCpu(result.totals.cpu)}</td>
+    <td>${formatGb(result.totals.ram)}</td>
+    <td>${formatGb(result.totals.disk)}</td>
+  `;
 
   const includedCount = selectedWorkloadDomains().length;
   const protectionCount = state.workloadDomains.filter((domain) => domain.included && domain.sprInclude).length;
