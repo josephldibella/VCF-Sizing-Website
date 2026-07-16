@@ -17,10 +17,6 @@
             workload-domain overhead, and protection blueprint requirements.
           </p>
         </div>
-        <div class="hero-meta">
-          <span>Workbook-aligned</span>
-          <strong>Management Domain Sizing</strong>
-        </div>
       </div>
     </header>
 
@@ -80,7 +76,22 @@
       <section class="panel">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">4. Platform Services</p>
+            <div class="eyebrow-line">
+              <p class="eyebrow">4. Platform Services</p>
+              <span class="info-wrap">
+                <button
+                  class="info-button"
+                  type="button"
+                  data-action="toggle-info"
+                  aria-label="About Platform Services"
+                  aria-expanded="false"
+                >i</button>
+                <span class="info-popover" role="tooltip" hidden>
+                  Services deployed through the VCF services runtime. Availability and resource
+                  requirements depend on the VCF instance model and deployment profile.
+                </span>
+              </span>
+            </div>
             <h2>Optional management services</h2>
           </div>
         </div>
@@ -91,7 +102,7 @@
         <div class="panel-heading with-action">
           <div>
             <p class="eyebrow">5. Workload Domains</p>
-            <h2>Additional workload-domain overhead</h2>
+            <h2>Workload-domain overhead</h2>
           </div>
           <button id="addDomainButton" type="button">Add domain</button>
         </div>
@@ -138,6 +149,9 @@
                 </tr>
               </thead>
               <tbody id="componentTable"></tbody>
+              <tfoot>
+                <tr id="componentTotals"></tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -152,10 +166,15 @@
         </div>
         <div id="detailAccordions" class="accordion-stack"></div>
       </section>
+
+      <div class="reset-band">
+        <button id="resetButton" class="reset-button" type="button">Reset to defaults</button>
+      </div>
     </main>
 
     <script src="data/lookups.js"></script>
     <script src="storage.js"></script>
+    <script src="core-services.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

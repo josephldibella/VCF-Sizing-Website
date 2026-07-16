@@ -35,6 +35,15 @@ select {
   font: inherit;
 }
 
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  border-color: #dfe5ec;
+  background: #eef1f5;
+  color: #7b8796;
+  opacity: 1;
+}
+
 button,
 input,
 select {
@@ -107,27 +116,12 @@ select {
   line-height: 1.6;
 }
 
-.hero-meta {
-  min-width: 220px;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow);
-}
-
-.hero-meta span,
 .summary-metric span,
 .summary-item span,
 .field label span,
 .domain-title span {
   display: block;
   color: var(--muted);
-}
-
-.hero-meta strong {
-  display: block;
-  margin-top: 4px;
 }
 
 .page {
@@ -178,6 +172,7 @@ select {
 }
 
 .panel {
+  min-width: 0;
   padding: 18px;
   box-shadow: var(--shadow);
 }
@@ -195,6 +190,74 @@ select {
   font-size: 1.2rem;
 }
 
+.eyebrow-line,
+.label-with-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.eyebrow-line {
+  margin-bottom: 8px;
+}
+
+.eyebrow-line .eyebrow {
+  margin-bottom: 0;
+}
+
+.info-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.info-button {
+  width: 20px;
+  min-height: 20px;
+  padding: 0;
+  border-color: #aebdce;
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.info-button:hover,
+.info-button:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.info-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(300px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.info-popover[hidden] {
+  display: none;
+}
+
+.info-popover.align-right {
+  right: 0;
+  left: auto;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -206,15 +269,37 @@ select {
   gap: 6px;
 }
 
-.field label {
+.field label,
+.field-label {
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.field-label > span {
+  color: var(--muted);
+}
+
+.field-label .label-with-info {
+  display: flex;
 }
 
 .field small {
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+.required-status {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b9ddc8;
+  border-radius: 8px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
 .domain-list {
@@ -227,6 +312,14 @@ select {
   border-radius: 8px;
   background: var(--surface-alt);
   padding: 14px;
+}
+
+.domain-card-disabled {
+  background: #f1f3f6;
+}
+
+.domain-card-disabled .domain-grid .field:not(:first-child) {
+  opacity: 0.72;
 }
 
 .domain-head {
@@ -305,6 +398,25 @@ select {
   font-size: 1.2rem;
 }
 
+.summary-item-inactive {
+  border-color: #dfe3e8;
+  background: #e7eaee;
+  color: #6f7884;
+}
+
+.summary-item-inactive span,
+.summary-item-inactive strong,
+.summary-item-inactive small {
+  color: #6f7884;
+}
+
+.summary-item-inactive small {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -326,6 +438,15 @@ td {
 th {
   color: var(--muted);
   font-size: 0.8rem;
+  font-weight: 800;
+}
+
+tfoot th,
+tfoot td {
+  border-top: 2px solid var(--line);
+  border-bottom: 0;
+  background: var(--surface-alt);
+  color: var(--ink);
   font-weight: 800;
 }
 
@@ -384,6 +505,25 @@ details ul {
   line-height: 1.5;
 }
 
+.reset-band {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.reset-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.reset-button:hover,
+.reset-button:focus-visible {
+  border-color: #1859bd;
+  background: #1859bd;
+}
+
 @media (max-width: 1100px) {
   .summary-band,
   .layout-band,
@@ -396,6 +536,16 @@ details ul {
 }
 
 @media (max-width: 720px) {
+  .info-popover,
+  .info-popover.align-right {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
   .hero-inner,
   .domain-head,
   .panel-heading,

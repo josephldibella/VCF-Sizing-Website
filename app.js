@@ -2,6 +2,29 @@ const LOOKUPS = window.VCF_LOOKUPS;
 
 const MAX_WORKLOAD_DOMAINS = 35;
 
+const DESCRIPTIONS = {
+  cpuOversubscription:
+    "The ratio of virtual CPU demand to physical CPU capacity used for host sizing. The workbook permits up to 2:1 and recommends continuous monitoring for performance bottlenecks.",
+  memoryOversubscription:
+    "The ratio of virtual machine memory demand to physical host memory used for host sizing. The workbook permits up to 2:1 and recommends adding capacity if sustained contention occurs.",
+  vcfProfileSize:
+    "A VCF profile is a predefined platform footprint that aligns the VCF services runtime topology and appliance capacity with the scale and availability required by the deployment.",
+  managementSsp:
+    "The Security Services Platform runs VMware vDefend capabilities such as security posture analytics, Security Intelligence, Network Detection and Response, and Malware Prevention. Add it when the VCF stack needs centralized advanced threat visibility and protection for an NSX Manager environment.",
+  nsxEdgeOrVna:
+    "Add NSX Edge when workloads require north-south routing or centralized network services. Add a Virtual Network Appliance for stateful services such as NAT in distributed VPC designs where those services cannot run directly on the hypervisors.",
+  nsxGlobalManager:
+    "NSX Global Manager provides centralized management of global network segments and firewall policy across federated NSX environments. Add it when consistent networking and security policy must span multiple VCF instances or sites.",
+  realTimeMetrics:
+    "Enables real-time data collection within the VCF services runtime. The workbook sizes the required runtime resources without deploying a separate real-time metrics appliance.",
+  softwareDepot:
+    "Stores software bundles used for lifecycle operations. It is enabled by default on the first VCF instance; an additional depot can be sized for an additional instance using existing VCF services runtime capacity.",
+  swapFile:
+    "Storage reserved for virtual machine swap files. The workbook sets this requirement equal to the total memory allocated to the sized management components.",
+  interimStorage:
+    "The storage subtotal before redundancy, operations reserve, and growth are applied. It equals virtual machine capacity plus swap file requirements.",
+};
+
 const OPTIONS = {
   storageTypes: ["vSAN-ESA", "vSAN-OSA", "FC", "NFS"],
   instanceModels: ["First Instance", "Additional Instance"],
@@ -18,6 +41,9 @@ const OPTIONS = {
   aviSizes: ["Excluded", "Small", "Large", "X-Large"],
   protectionModes: ["Exclude", "Management Only", "Management & Workload", "Workload Only"],
   srmSizes: ["Light", "Standard"],
+  vcfOperationsSizes: ["Extra Small", "Small", "Medium", "Large", "Extra Large"],
+  cloudProxySizes: ["Small", "Standard"],
+  vcfAutomationSizes: ["Exclude", "Small", "Medium", "Large"],
 };
 
 const elements = {
@@ -29,6 +55,7 @@ const elements = {
   domainCards: document.querySelector("#domainCards"),
   warningList: document.querySelector("#warningList"),
   componentTable: document.querySelector("#componentTable"),
+  componentTotals: document.querySelector("#componentTotals"),
   hostSummary: document.querySelector("#hostSummary"),
   detailAccordions: document.querySelector("#detailAccordions"),
   totalCpu: document.querySelector("#totalCpu"),
@@ -36,53 +63,58 @@ const elements = {
   totalDisk: document.querySelector("#totalDisk"),
   hostCount: document.querySelector("#hostCount"),
   addDomainButton: document.querySelector("#addDomainButton"),
+  resetButton: document.querySelector("#resetButton"),
 };
 
-const state = {
-  assumptions: {
-    reservePct: 30,
-    growthPct: 10,
-    hostCores: 128,
-    hostRam: 1024,
-    cpuOversub: 1,
-    ramOversub: 1,
-    storageType: "vSAN-ESA",
-  },
-  instance: {
-    model: "First Instance",
-    deploymentModel: "High Availability",
-    deploymentSize: "Medium",
-  },
-  management: {
-    customProfile: false,
-    vcenterSize: "Medium",
-    vcenterStorage: "Large",
-    nsxModel: "Mandatory - HA Cluster",
-    nsxSize: "Medium",
-    edgeSize: "Excluded",
-    gmSize: "Excluded",
-    aviSize: "Excluded",
-    sspSize: "Excluded",
-  },
-  services: {
-    vcfOperations: "Exclude",
-    cloudProxy: "Exclude",
-    vcfAutomation: "Exclude",
-    logManagement: "Exclude",
-    logReplicas: 3,
-    networkOperations: "Exclude",
-    realTimeMetrics: "Exclude",
-    softwareDepot: "Exclude",
-    identityBroker: "Exclude",
-  },
-  protection: {
-    sprMode: "Exclude",
-    mgmtSrmSize: "Standard",
-    workloadSrmSize: "Standard",
-    ransomwareRecovery: "Exclude",
-  },
-  workloadDomains: [createDomain(1)],
-};
+function createDefaultState() {
+  return {
+    assumptions: {
+      reservePct: 30,
+      growthPct: 10,
+      hostCores: 128,
+      hostRam: 1024,
+      cpuOversub: 1,
+      ramOversub: 1,
+      storageType: "vSAN-ESA",
+    },
+    instance: {
+      model: "First Instance",
+      deploymentModel: "High Availability",
+      deploymentSize: "Medium",
+    },
+    management: {
+      customProfile: false,
+      vcenterSize: "Medium",
+      vcenterStorage: "Large",
+      nsxModel: "Mandatory - HA Cluster",
+      nsxSize: "Medium",
+      edgeSize: "Excluded",
+      gmSize: "Excluded",
+      aviSize: "Excluded",
+      sspSize: "Excluded",
+      vcfOperationsSize: "Large",
+      cloudProxySize: "Standard",
+    },
+    services: {
+      vcfAutomationSize: "Exclude",
+      logManagement: "Exclude",
+      logReplicas: 3,
+      networkOperations: "Exclude",
+      realTimeMetrics: "Exclude",
+      softwareDepot: "Exclude",
+      identityBroker: "Exclude",
+    },
+    protection: {
+      sprMode: "Exclude",
+      mgmtSrmSize: "Standard",
+      workloadSrmSize: "Standard",
+      ransomwareRecovery: "Exclude",
+    },
+    workloadDomains: [createDomain(1)],
+  };
+}
+
+const state = createDefaultState();
 
 function createDomain(index) {
   return {
@@ -148,6 +180,27 @@ function currentManagementProfile() {
     ...state.management,
     ...recommendedManagementProfile(),
   };
+}
+
+function recommendedCoreServiceSizes() {
+  return {
+    vcfOperationsSize: window.VCF_CORE_SERVICES.recommendedVcfOperationsSize({
+      deploymentModel: state.instance.deploymentModel,
+      deploymentSize: state.instance.deploymentSize,
+    }),
+    cloudProxySize: window.VCF_CORE_SERVICES.recommendedCloudProxySize({
+      deploymentSize: state.instance.deploymentSize,
+    }),
+  };
+}
+
+function currentCoreServiceSizes() {
+  return state.management.customProfile
+    ? {
+        vcfOperationsSize: state.management.vcfOperationsSize,
+        cloudProxySize: state.management.cloudProxySize,
+      }
+    : recommendedCoreServiceSizes();
 }
 
 function lookup(tableName, key) {
@@ -240,6 +293,11 @@ function calculate() {
   const warnings = [];
   const mgmt = currentManagementProfile();
   const services = state.services;
+  const requiredServices = window.VCF_CORE_SERVICES.requiredCoreServices({
+    instanceModel: state.instance.model,
+    deploymentModel: state.instance.deploymentModel,
+  });
+  const coreServiceSizes = currentCoreServiceSizes();
   const selectedDomains = selectedWorkloadDomains();
   const protection = protectionFlags();
 
@@ -256,14 +314,7 @@ function calculate() {
 
   if (
     state.instance.model === "Additional Instance" &&
-    services.vcfOperations === "Include"
-  ) {
-    warnings.push("VCF Operations should remain excluded for an additional instance.");
-  }
-
-  if (
-    state.instance.model === "Additional Instance" &&
-    services.vcfAutomation === "Include"
+    services.vcfAutomationSize !== "Exclude"
   ) {
     warnings.push("VCF Automation should remain excluded for an additional instance.");
   }
@@ -501,15 +552,9 @@ function calculate() {
 
   let vcfOpsNodes = 0;
   let vcfOpsApplianceSize = null;
-  if (services.vcfOperations === "Include") {
+  if (requiredServices.vcfOperations) {
     vcfOpsNodes = deploymentModel === "High Availability" ? 3 : deploymentModel === "Simple" ? 1 : 0;
-    if (deploymentModel === "High Availability" && profileSize === "Medium") {
-      vcfOpsApplianceSize = "Large";
-    } else if (deploymentModel === "High Availability" && profileSize === "Large") {
-      vcfOpsApplianceSize = "Extra Large";
-    } else {
-      vcfOpsApplianceSize = profileSize;
-    }
+    vcfOpsApplianceSize = coreServiceSizes.vcfOperationsSize;
   }
   rows.push(
     component(
@@ -521,34 +566,33 @@ function calculate() {
     ),
   );
 
-  const cloudProxyNodes = services.cloudProxy === "Include" ? 1 : 0;
+  const cloudProxyNodes = requiredServices.cloudProxy ? 1 : 0;
+  const cloudProxyLookupSize = window.VCF_CORE_SERVICES.cloudProxyLookupSize(
+    coreServiceSizes.cloudProxySize,
+  );
   rows.push(
     component(
       "Cloud Proxy",
       cloudProxyNodes,
-      cloudProxyNodes ? lookup("table_vcfo_p_cpu", profileSize) : 0,
-      cloudProxyNodes ? lookup("table_vcfo_p_ram", profileSize) : 0,
-      cloudProxyNodes ? lookup("table_vcfo_p_disk", profileSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_cpu", cloudProxyLookupSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_ram", cloudProxyLookupSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_disk", cloudProxyLookupSize) : 0,
     ),
   );
 
-  const licenseServerNodes = instanceModel === "Additional Instance" || services.vcfOperations === "Exclude" ? 0 : 1;
+  const licenseServerNodes = requiredServices.vcfOperations ? 1 : 0;
   rows.push(component("License Server", licenseServerNodes, licenseServerNodes * 2, licenseServerNodes * 4, licenseServerNodes * 12));
 
-  const automationNodes = services.vcfAutomation === "Include"
-    ? deploymentModel === "High Availability"
-      ? 3
-      : deploymentModel === "Simple"
-        ? 1
-        : 0
-    : 0;
+  const automationNodes = window.VCF_CORE_SERVICES.vcfAutomationNodeCount(
+    services.vcfAutomationSize,
+  );
   rows.push(
     component(
       "VCF Automation",
       automationNodes,
-      automationNodes ? lookup("table_vcfa_appliance_cpu", profileSize) * automationNodes : 0,
-      automationNodes ? lookup("table_vcfa_appliance_ram", profileSize) * automationNodes : 0,
-      automationNodes ? lookup("table_vcfa_appliance_disk", profileSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_cpu", services.vcfAutomationSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_ram", services.vcfAutomationSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_disk", services.vcfAutomationSize) * automationNodes : 0,
     ),
   );
 
@@ -710,18 +754,48 @@ function calculate() {
   };
 }
 
-function fieldTemplate({ label, path, value, type = "text", options = [], note = "" }) {
+function infoLabel(label, description = "") {
+  if (!description) {
+    return `<span>${label}</span>`;
+  }
+
+  return `
+    <span class="label-with-info">
+      <span>${label}</span>
+      <span class="info-wrap">
+        <button
+          class="info-button"
+          type="button"
+          data-action="toggle-info"
+          aria-label="About ${label}"
+          aria-expanded="false"
+        >i</button>
+        <span class="info-popover" role="tooltip" hidden>${description}</span>
+      </span>
+    </span>
+  `;
+}
+
+function fieldTemplate({ label, path, value, type = "text", options = [], note = "", description = "", disabled = false }) {
+  if (type === "status") {
+    return `
+      <div class="field">
+        <div class="field-label">${infoLabel(label, description)}</div>
+        <div class="required-status">${value}</div>
+        ${note ? `<small>${note}</small>` : ""}
+      </div>
+    `;
+  }
+
   if (type === "select") {
     return `
       <div class="field">
-        <label>
-          <span>${label}</span>
-          <select data-path="${path}" data-type="text">
-            ${options
-              .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
-              .join("")}
-          </select>
-        </label>
+        <div class="field-label">${infoLabel(label, description)}</div>
+        <select aria-label="${label}" data-path="${path}" data-type="text" ${disabled ? "disabled" : ""}>
+          ${options
+            .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+            .join("")}
+        </select>
         ${note ? `<small>${note}</small>` : ""}
       </div>
     `;
@@ -730,9 +804,9 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
   if (type === "checkbox") {
     return `
       <div class="field">
-        <label><span>${label}</span></label>
+        <div class="field-label">${infoLabel(label, description)}</div>
         <label class="checkbox-row">
-          <input type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} />
+          <input aria-label="${label}" type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} ${disabled ? "disabled" : ""} />
           <span>${value ? "Enabled" : "Disabled"}</span>
         </label>
         ${note ? `<small>${note}</small>` : ""}
@@ -742,10 +816,8 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
 
   return `
     <div class="field">
-      <label>
-        <span>${label}</span>
-        <input type="number" data-path="${path}" data-type="number" value="${value}" />
-      </label>
+      <div class="field-label">${infoLabel(label, description)}</div>
+      <input aria-label="${label}" type="number" data-path="${path}" data-type="number" value="${value}" ${disabled ? "disabled" : ""} />
       ${note ? `<small>${note}</small>` : ""}
     </div>
   `;
@@ -757,8 +829,8 @@ function renderAssumptions() {
     fieldTemplate({ label: "Storage growth (%)", path: "assumptions.growthPct", value: state.assumptions.growthPct, type: "number" }),
     fieldTemplate({ label: "CPU cores per host", path: "assumptions.hostCores", value: state.assumptions.hostCores, type: "number" }),
     fieldTemplate({ label: "RAM per host (GB)", path: "assumptions.hostRam", value: state.assumptions.hostRam, type: "number" }),
-    fieldTemplate({ label: "CPU oversubscription", path: "assumptions.cpuOversub", value: state.assumptions.cpuOversub, type: "number" }),
-    fieldTemplate({ label: "Memory oversubscription", path: "assumptions.ramOversub", value: state.assumptions.ramOversub, type: "number" }),
+    fieldTemplate({ label: "CPU oversubscription", path: "assumptions.cpuOversub", value: state.assumptions.cpuOversub, type: "number", description: DESCRIPTIONS.cpuOversubscription }),
+    fieldTemplate({ label: "Memory oversubscription", path: "assumptions.ramOversub", value: state.assumptions.ramOversub, type: "number", description: DESCRIPTIONS.memoryOversubscription }),
     fieldTemplate({ label: "Primary storage type", path: "assumptions.storageType", value: state.assumptions.storageType, type: "select", options: OPTIONS.storageTypes, note: "Used for host minimums and storage overhead." }),
   ].join("");
 }
@@ -767,7 +839,7 @@ function renderProfile(warnings) {
   elements.profileForm.innerHTML = [
     fieldTemplate({ label: "Instance model", path: "instance.model", value: state.instance.model, type: "select", options: OPTIONS.instanceModels }),
     fieldTemplate({ label: "Availability model", path: "instance.deploymentModel", value: state.instance.deploymentModel, type: "select", options: OPTIONS.deploymentModels }),
-    fieldTemplate({ label: "VCF profile size", path: "instance.deploymentSize", value: state.instance.deploymentSize, type: "select", options: OPTIONS.deploymentSizes }),
+    fieldTemplate({ label: "VCF profile size", path: "instance.deploymentSize", value: state.instance.deploymentSize, type: "select", options: OPTIONS.deploymentSizes, description: DESCRIPTIONS.vcfProfileSize }),
   ].join("");
 
   elements.warningList.innerHTML = warnings.length
@@ -778,7 +850,45 @@ function renderProfile(warnings) {
 function renderManagement() {
   const recommended = recommendedManagementProfile();
   const profile = currentManagementProfile();
+  const coreServiceSizes = currentCoreServiceSizes();
+  const profileLocked = !state.management.customProfile;
+  const requiredServices = window.VCF_CORE_SERVICES.requiredCoreServices({
+    instanceModel: state.instance.model,
+    deploymentModel: state.instance.deploymentModel,
+  });
+  const deploymentExcluded = state.instance.deploymentModel === "Exclude";
   elements.managementForm.innerHTML = [
+    requiredServices.vcfOperations
+      ? fieldTemplate({
+          label: "VCF Operations size",
+          path: "management.vcfOperationsSize",
+          value: coreServiceSizes.vcfOperationsSize,
+          type: "select",
+          options: OPTIONS.vcfOperationsSizes,
+          disabled: profileLocked,
+          note: profileLocked ? `Profile default: ${coreServiceSizes.vcfOperationsSize}` : "Required for the first VCF instance.",
+        })
+      : fieldTemplate({
+          label: "VCF Operations",
+          value: deploymentExcluded ? "Not sized" : "Uses fleet VCF Operations",
+          type: "status",
+          note: deploymentExcluded
+            ? "Select a deployment model to size the required core services."
+            : "Additional instances connect to the VCF Operations deployment for the existing fleet.",
+        }),
+    fieldTemplate({
+      label: "Cloud Proxy size",
+      path: "management.cloudProxySize",
+      value: coreServiceSizes.cloudProxySize,
+      type: "select",
+      options: OPTIONS.cloudProxySizes,
+      disabled: profileLocked || !requiredServices.cloudProxy,
+      note: requiredServices.cloudProxy
+        ? profileLocked
+          ? `Profile default: ${coreServiceSizes.cloudProxySize}`
+          : "Required for each deployed VCF instance."
+        : "Select a deployment model to size the required Cloud Proxy.",
+    }),
     fieldTemplate({
       label: "Customize management profile",
       path: "management.customProfile",
@@ -792,6 +902,7 @@ function renderManagement() {
       value: profile.vcenterSize,
       type: "select",
       options: LOOKUPS.lists.sizing_vcenter_appliance_size_list,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.vcenterSize}`,
     }),
     fieldTemplate({
@@ -800,6 +911,7 @@ function renderManagement() {
       value: profile.vcenterStorage,
       type: "select",
       options: OPTIONS.vcenterStorageSizes,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.vcenterStorage}`,
     }),
     fieldTemplate({
@@ -808,6 +920,7 @@ function renderManagement() {
       value: profile.nsxModel,
       type: "select",
       options: OPTIONS.mgmtNsxModels,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.nsxModel}`,
     }),
     fieldTemplate({
@@ -816,6 +929,7 @@ function renderManagement() {
       value: profile.nsxSize,
       type: "select",
       options: LOOKUPS.lists.sizing_nsxt_manager_size_list,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.nsxSize}`,
     }),
     fieldTemplate({
@@ -824,6 +938,8 @@ function renderManagement() {
       value: state.management.edgeSize,
       type: "select",
       options: LOOKUPS.lists.sizing_nsxt_edge_sizing_list,
+      description: DESCRIPTIONS.nsxEdgeOrVna,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "NSX global manager size",
@@ -831,6 +947,8 @@ function renderManagement() {
       value: state.management.gmSize,
       type: "select",
       options: OPTIONS.gmOptions,
+      description: DESCRIPTIONS.nsxGlobalManager,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "Management AVI load balancer",
@@ -838,6 +956,7 @@ function renderManagement() {
       value: state.management.aviSize,
       type: "select",
       options: OPTIONS.aviSizes,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "Management SSP size",
@@ -845,20 +964,20 @@ function renderManagement() {
       value: state.management.sspSize,
       type: "select",
       options: OPTIONS.sspSizes,
+      description: DESCRIPTIONS.managementSsp,
+      disabled: profileLocked,
     }),
   ].join("");
 }
 
 function renderServices() {
   elements.servicesForm.innerHTML = [
-    fieldTemplate({ label: "VCF Operations", path: "services.vcfOperations", value: state.services.vcfOperations, type: "select", options: OPTIONS.includeExclude }),
-    fieldTemplate({ label: "Cloud Proxy", path: "services.cloudProxy", value: state.services.cloudProxy, type: "select", options: OPTIONS.includeExclude }),
-    fieldTemplate({ label: "VCF Automation", path: "services.vcfAutomation", value: state.services.vcfAutomation, type: "select", options: OPTIONS.includeExclude }),
+    fieldTemplate({ label: "VCF Automation size", path: "services.vcfAutomationSize", value: state.services.vcfAutomationSize, type: "select", options: OPTIONS.vcfAutomationSizes }),
     fieldTemplate({ label: "Log Management size", path: "services.logManagement", value: state.services.logManagement, type: "select", options: OPTIONS.logsSizes }),
     fieldTemplate({ label: "Log replicas", path: "services.logReplicas", value: state.services.logReplicas, type: "number", note: "Used when Log Management is enabled." }),
     fieldTemplate({ label: "VCF Operations for networks", path: "services.networkOperations", value: state.services.networkOperations, type: "select", options: OPTIONS.logsSizes }),
-    fieldTemplate({ label: "Real-time metrics", path: "services.realTimeMetrics", value: state.services.realTimeMetrics, type: "select", options: OPTIONS.includeExclude }),
-    fieldTemplate({ label: "Software Depot (additional instance)", path: "services.softwareDepot", value: state.services.softwareDepot, type: "select", options: OPTIONS.includeExclude }),
+    fieldTemplate({ label: "Real-time metrics", path: "services.realTimeMetrics", value: state.services.realTimeMetrics, type: "select", options: OPTIONS.includeExclude, description: DESCRIPTIONS.realTimeMetrics }),
+    fieldTemplate({ label: "Software Depot (additional instance)", path: "services.softwareDepot", value: state.services.softwareDepot, type: "select", options: OPTIONS.includeExclude, description: DESCRIPTIONS.softwareDepot }),
     fieldTemplate({ label: "Identity Broker (additional instance)", path: "services.identityBroker", value: state.services.identityBroker, type: "select", options: OPTIONS.includeExclude }),
   ].join("");
 }
@@ -876,7 +995,7 @@ function renderDomains() {
   elements.domainCards.innerHTML = state.workloadDomains
     .map((domain, index) => {
       return `
-        <article class="domain-card">
+        <article class="domain-card ${domain.included ? "" : "domain-card-disabled"}">
           <div class="domain-head">
             <div class="domain-title">
               <strong>${domain.id}</strong>
@@ -884,20 +1003,20 @@ function renderDomains() {
             </div>
             <div>
               <span class="pill ${domain.included ? "ok" : "warn"}">${domain.included ? "Included" : "Excluded"}</span>
-              <button type="button" data-action="remove-domain" data-index="${index}" ${state.workloadDomains.length === 1 ? "disabled" : ""}>Remove</button>
+              <button type="button" data-action="remove-domain" data-index="${index}" ${state.workloadDomains.length === 1 && !domain.included ? "disabled" : ""}>Remove</button>
             </div>
           </div>
           <div class="domain-grid">
             ${fieldTemplate({ label: "Include domain", path: `workloadDomains.${index}.included`, value: domain.included, type: "checkbox" })}
-            ${fieldTemplate({ label: "vCenter size", path: `workloadDomains.${index}.vcenterSize`, value: domain.vcenterSize, type: "select", options: LOOKUPS.lists.sizing_vcenter_appliance_size_list })}
-            ${fieldTemplate({ label: "vCenter storage", path: `workloadDomains.${index}.vcenterStorage`, value: domain.vcenterStorage, type: "select", options: OPTIONS.vcenterStorageSizes })}
-            ${fieldTemplate({ label: "NSX model", path: `workloadDomains.${index}.nsxModel`, value: domain.nsxModel, type: "select", options: OPTIONS.workloadNsxModels })}
-            ${fieldTemplate({ label: "NSX size", path: `workloadDomains.${index}.nsxSize`, value: domain.nsxSize, type: "select", options: LOOKUPS.lists.sizing_nsxt_manager_size_list })}
-            ${fieldTemplate({ label: "Global manager", path: `workloadDomains.${index}.gmChoice`, value: domain.gmChoice, type: "select", options: OPTIONS.workloadGmOptions })}
-            ${fieldTemplate({ label: "Global manager size", path: `workloadDomains.${index}.gmSize`, value: domain.gmSize, type: "select", options: OPTIONS.gmOptions })}
-            ${fieldTemplate({ label: "Protection on this domain", path: `workloadDomains.${index}.sprInclude`, value: domain.sprInclude, type: "checkbox" })}
-            ${fieldTemplate({ label: "AVI load balancer", path: `workloadDomains.${index}.aviSize`, value: domain.aviSize, type: "select", options: OPTIONS.aviSizes })}
-            ${fieldTemplate({ label: "Security Services Platform", path: `workloadDomains.${index}.sspSize`, value: domain.sspSize, type: "select", options: OPTIONS.sspSizes })}
+            ${fieldTemplate({ label: "vCenter size", path: `workloadDomains.${index}.vcenterSize`, value: domain.vcenterSize, type: "select", options: LOOKUPS.lists.sizing_vcenter_appliance_size_list, disabled: !domain.included })}
+            ${fieldTemplate({ label: "vCenter storage", path: `workloadDomains.${index}.vcenterStorage`, value: domain.vcenterStorage, type: "select", options: OPTIONS.vcenterStorageSizes, disabled: !domain.included })}
+            ${fieldTemplate({ label: "NSX model", path: `workloadDomains.${index}.nsxModel`, value: domain.nsxModel, type: "select", options: OPTIONS.workloadNsxModels, disabled: !domain.included })}
+            ${fieldTemplate({ label: "NSX size", path: `workloadDomains.${index}.nsxSize`, value: domain.nsxSize, type: "select", options: LOOKUPS.lists.sizing_nsxt_manager_size_list, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Global manager", path: `workloadDomains.${index}.gmChoice`, value: domain.gmChoice, type: "select", options: OPTIONS.workloadGmOptions, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Global manager size", path: `workloadDomains.${index}.gmSize`, value: domain.gmSize, type: "select", options: OPTIONS.gmOptions, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Protection on this domain", path: `workloadDomains.${index}.sprInclude`, value: domain.sprInclude, type: "checkbox", disabled: !domain.included })}
+            ${fieldTemplate({ label: "AVI load balancer", path: `workloadDomains.${index}.aviSize`, value: domain.aviSize, type: "select", options: OPTIONS.aviSizes, disabled: !domain.included })}
+            ${fieldTemplate({ label: "Security Services Platform", path: `workloadDomains.${index}.sspSize`, value: domain.sspSize, type: "select", options: OPTIONS.sspSizes, disabled: !domain.included })}
           </div>
         </article>
       `;
@@ -911,23 +1030,25 @@ function renderResults(result) {
   elements.totalDisk.textContent = formatGb(result.totals.disk);
   elements.hostCount.textContent = formatNumber(result.hostSummary.hostCount);
 
+  const externalStorage = state.assumptions.storageType === "FC" || state.assumptions.storageType === "NFS";
   elements.hostSummary.innerHTML = [
     { label: "Hosts required", value: formatNumber(result.hostSummary.hostCount) },
     { label: "CPU per host (N-1)", value: `${formatNumber(result.hostSummary.cpuPerHost)} CPUs` },
     { label: "Memory per host (N-1)", value: formatGb(result.hostSummary.ramPerHost) },
     { label: "Virtual Machine Capacity Requirements", value: formatGb(result.hostSummary.vmCapacity) },
-    { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile) },
-    { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage) },
-    { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage) },
-    { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage) },
+    { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile), description: DESCRIPTIONS.swapFile },
+    { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage), description: DESCRIPTIONS.interimStorage },
+    { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage), inactive: externalStorage },
+    { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage), inactive: externalStorage },
     { label: "Allow for Estimated Growth", value: formatGb(result.hostSummary.growthStorage) },
-    { label: "Storage per Host (based on N-1 hosts)", value: formatGb(result.hostSummary.storagePerHost) },
+    { label: "Storage per Host (based on N-1 hosts)", value: formatGb(result.hostSummary.storagePerHost), inactive: externalStorage },
   ]
     .map(
       (item) => `
-        <div class="summary-item">
-          <span>${item.label}</span>
+        <div class="summary-item ${item.inactive ? "summary-item-inactive" : ""}" ${item.inactive ? 'aria-label="Not applicable to FC or NFS storage"' : ""}>
+          ${infoLabel(item.label, item.description)}
           <strong>${item.value}</strong>
+          ${item.inactive ? "<small>Not applied to FC or NFS storage</small>" : ""}
         </div>
       `,
     )
@@ -947,6 +1068,14 @@ function renderResults(result) {
       `,
     )
     .join("");
+
+  elements.componentTotals.innerHTML = `
+    <th scope="row">Totals</th>
+    <td>${formatNumber(result.totals.nodes)}</td>
+    <td>${formatCpu(result.totals.cpu)}</td>
+    <td>${formatGb(result.totals.ram)}</td>
+    <td>${formatGb(result.totals.disk)}</td>
+  `;
 
   const includedCount = selectedWorkloadDomains().length;
   const protectionCount = state.workloadDomains.filter((domain) => domain.included && domain.sprInclude).length;
@@ -970,17 +1099,9 @@ function renderResults(result) {
       </ul>
     </details>
     <details>
-      <summary>Source material structure</summary>
+      <summary>Upcoming improvements</summary>
       <ul>
-        <li><strong>Workbook:</strong> place Excel sources in <code>source/workbooks</code>.</li>
-        <li><strong>PDFs:</strong> place official product docs in <code>source/docs</code>.</li>
-        <li><strong>Notes:</strong> put rule overrides and exceptions in <code>source/references</code>.</li>
-        <li><strong>Screenshots:</strong> store external-tool captures in <code>source/screenshots</code>.</li>
-      </ul>
-    </details>
-    <details>
-      <summary>What I would add next</summary>
-      <ul>
+        <li>Continued UI improvements.</li>
         <li>Advanced management-domain overrides for the full workbook parity path.</li>
         <li>JSON export targeting installer-oriented payloads.</li>
         <li>Additional tabs for IP requirements, workload-domain planning, and deployment preparation.</li>
@@ -1016,6 +1137,10 @@ document.addEventListener("change", (event) => {
     ? target.checked
     : target.value;
 
+  if (path === "management.customProfile" && rawValue === true) {
+    Object.assign(state.management, recommendedManagementProfile(), recommendedCoreServiceSizes());
+  }
+
   setNestedValue(path, rawValue, type);
   render();
 });
@@ -1026,6 +1151,38 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const infoButton = target.closest('[data-action="toggle-info"]');
+  if (infoButton instanceof HTMLButtonElement) {
+    const popover = infoButton.parentElement?.querySelector(".info-popover");
+    const willOpen = popover?.hidden ?? false;
+
+    document.querySelectorAll(".info-popover").forEach((item) => {
+      item.hidden = true;
+    });
+    document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+
+    if (popover && willOpen) {
+      popover.classList.remove("align-right");
+      popover.hidden = false;
+      if (popover.getBoundingClientRect().right > document.documentElement.clientWidth - 8) {
+        popover.classList.add("align-right");
+      }
+      infoButton.setAttribute("aria-expanded", "true");
+    }
+    return;
+  }
+
+  if (!target.closest(".info-popover")) {
+    document.querySelectorAll(".info-popover").forEach((item) => {
+      item.hidden = true;
+    });
+    document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
   const action = target.dataset.action;
   if (action === "remove-domain") {
     const index = Number(target.dataset.index);
@@ -1034,9 +1191,24 @@ document.addEventListener("click", (event) => {
       state.workloadDomains.forEach((domain, idx) => {
         domain.id = `w${idx + 1}`;
       });
-      render();
+    } else {
+      state.workloadDomains[index].included = false;
     }
+    render();
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  document.querySelectorAll(".info-popover").forEach((item) => {
+    item.hidden = true;
+  });
+  document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
 });
 
 elements.addDomainButton.addEventListener("click", () => {
@@ -1044,6 +1216,14 @@ elements.addDomainButton.addEventListener("click", () => {
     return;
   }
   state.workloadDomains.push(createDomain(state.workloadDomains.length + 1));
+  render();
+});
+
+elements.resetButton.addEventListener("click", () => {
+  Object.keys(state).forEach((key) => {
+    delete state[key];
+  });
+  Object.assign(state, createDefaultState());
   render();
 });
 
