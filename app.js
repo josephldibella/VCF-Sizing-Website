@@ -1003,7 +1003,7 @@ function renderDomains() {
             </div>
             <div>
               <span class="pill ${domain.included ? "ok" : "warn"}">${domain.included ? "Included" : "Excluded"}</span>
-              <button type="button" data-action="remove-domain" data-index="${index}" ${state.workloadDomains.length === 1 ? "disabled" : ""}>Remove</button>
+              <button type="button" data-action="remove-domain" data-index="${index}" ${state.workloadDomains.length === 1 && !domain.included ? "disabled" : ""}>Remove</button>
             </div>
           </div>
           <div class="domain-grid">
@@ -1099,17 +1099,9 @@ function renderResults(result) {
       </ul>
     </details>
     <details>
-      <summary>Source material structure</summary>
+      <summary>Upcoming improvements</summary>
       <ul>
-        <li><strong>Workbook:</strong> place Excel sources in <code>source/workbooks</code>.</li>
-        <li><strong>PDFs:</strong> place official product docs in <code>source/docs</code>.</li>
-        <li><strong>Notes:</strong> put rule overrides and exceptions in <code>source/references</code>.</li>
-        <li><strong>Screenshots:</strong> store external-tool captures in <code>source/screenshots</code>.</li>
-      </ul>
-    </details>
-    <details>
-      <summary>What I would add next</summary>
-      <ul>
+        <li>Continued UI improvements.</li>
         <li>Advanced management-domain overrides for the full workbook parity path.</li>
         <li>JSON export targeting installer-oriented payloads.</li>
         <li>Additional tabs for IP requirements, workload-domain planning, and deployment preparation.</li>
@@ -1199,8 +1191,10 @@ document.addEventListener("click", (event) => {
       state.workloadDomains.forEach((domain, idx) => {
         domain.id = `w${idx + 1}`;
       });
-      render();
+    } else {
+      state.workloadDomains[index].included = false;
     }
+    render();
   }
 });
 
