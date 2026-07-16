@@ -107,27 +107,12 @@ select {
   line-height: 1.6;
 }
 
-.hero-meta {
-  min-width: 220px;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow);
-}
-
-.hero-meta span,
 .summary-metric span,
 .summary-item span,
 .field label span,
 .domain-title span {
   display: block;
   color: var(--muted);
-}
-
-.hero-meta strong {
-  display: block;
-  margin-top: 4px;
 }
 
 .page {
@@ -178,6 +163,7 @@ select {
 }
 
 .panel {
+  min-width: 0;
   padding: 18px;
   box-shadow: var(--shadow);
 }
@@ -195,6 +181,74 @@ select {
   font-size: 1.2rem;
 }
 
+.eyebrow-line,
+.label-with-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.eyebrow-line {
+  margin-bottom: 8px;
+}
+
+.eyebrow-line .eyebrow {
+  margin-bottom: 0;
+}
+
+.info-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.info-button {
+  width: 20px;
+  min-height: 20px;
+  padding: 0;
+  border-color: #aebdce;
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.info-button:hover,
+.info-button:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.info-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(300px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.info-popover[hidden] {
+  display: none;
+}
+
+.info-popover.align-right {
+  right: 0;
+  left: auto;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -206,9 +260,18 @@ select {
   gap: 6px;
 }
 
-.field label {
+.field label,
+.field-label {
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.field-label > span {
+  color: var(--muted);
+}
+
+.field-label .label-with-info {
+  display: flex;
 }
 
 .field small {
@@ -396,6 +459,16 @@ details ul {
 }
 
 @media (max-width: 720px) {
+  .info-popover,
+  .info-popover.align-right {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
   .hero-inner,
   .domain-head,
   .panel-heading,

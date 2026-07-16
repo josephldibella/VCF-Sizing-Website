@@ -2,6 +2,25 @@ const LOOKUPS = window.VCF_LOOKUPS;
 
 const MAX_WORKLOAD_DOMAINS = 35;
 
+const DESCRIPTIONS = {
+  cpuOversubscription:
+    "The ratio of virtual CPU demand to physical CPU capacity used for host sizing. The workbook permits up to 2:1 and recommends continuous monitoring for performance bottlenecks.",
+  memoryOversubscription:
+    "The ratio of virtual machine memory demand to physical host memory used for host sizing. The workbook permits up to 2:1 and recommends adding capacity if sustained contention occurs.",
+  vcfProfileSize:
+    "Selects the predefined appliance and VCF services runtime sizing associated with the deployment posture. Workbook guidance maps Simple deployments to Small and High Availability deployments to Medium or Large.",
+  managementSsp:
+    "Sizes the management-domain Security Services Platform. A selected size includes the SSP installer, control-plane or controller nodes, worker nodes, and licensing-hub resources defined by the workbook.",
+  realTimeMetrics:
+    "Enables real-time data collection within the VCF services runtime. The workbook sizes the required runtime resources without deploying a separate real-time metrics appliance.",
+  softwareDepot:
+    "Stores software bundles used for lifecycle operations. It is enabled by default on the first VCF instance; an additional depot can be sized for an additional instance using existing VCF services runtime capacity.",
+  swapFile:
+    "Storage reserved for virtual machine swap files. The workbook sets this requirement equal to the total memory allocated to the sized management components.",
+  interimStorage:
+    "The storage subtotal before redundancy, operations reserve, and growth are applied. It equals virtual machine capacity plus swap file requirements.",
+};
+
 const OPTIONS = {
   storageTypes: ["vSAN-ESA", "vSAN-OSA", "FC", "NFS"],
   instanceModels: ["First Instance", "Additional Instance"],
@@ -710,18 +729,38 @@ function calculate() {
   };
 }
 
-function fieldTemplate({ label, path, value, type = "text", options = [], note = "" }) {
+function infoLabel(label, description = "") {
+  if (!description) {
+    return `<span>${label}</span>`;
+  }
+
+  return `
+    <span class="label-with-info">
+      <span>${label}</span>
+      <span class="info-wrap">
+        <button
+          class="info-button"
+          type="button"
+          data-action="toggle-info"
+          aria-label="About ${label}"
+          aria-expanded="false"
+        >i</button>
+        <span class="info-popover" role="tooltip" hidden>${description}</span>
+      </span>
+    </span>
+  `;
+}
+
+function fieldTemplate({ label, path, value, type = "text", options = [], note = "", description = "" }) {
   if (type === "select") {
     return `
       <div class="field">
-        <label>
-          <span>${label}</span>
-          <select data-path="${path}" data-type="text">
-            ${options
-              .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
-              .join("")}
-          </select>
-        </label>
+        <div class="field-label">${infoLabel(label, description)}</div>
+        <select aria-label="${label}" data-path="${path}" data-type="text">
+          ${options
+            .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+            .join("")}
+        </select>
         ${note ? `<small>${note}</small>` : ""}
       </div>
     `;
@@ -730,9 +769,9 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
   if (type === "checkbox") {
     return `
       <div class="field">
-        <label><span>${label}</span></label>
+        <div class="field-label">${infoLabel(label, description)}</div>
         <label class="checkbox-row">
-          <input type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} />
+          <input aria-label="${label}" type="checkbox" data-path="${path}" data-type="boolean" ${value ? "checked" : ""} />
           <span>${value ? "Enabled" : "Disabled"}</span>
         </label>
         ${note ? `<small>${note}</small>` : ""}
@@ -742,10 +781,8 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
 
   return `
     <div class="field">
-      <label>
-        <span>${label}</span>
-        <input type="number" data-path="${path}" data-type="number" value="${value}" />
-      </label>
+      <div class="field-label">${infoLabel(label, description)}</div>
+      <input aria-label="${label}" type="number" data-path="${path}" data-type="number" value="${value}" />
       ${note ? `<small>${note}</small>` : ""}
     </div>
   `;
@@ -757,8 +794,8 @@ function renderAssumptions() {
     fieldTemplate({ label: "Storage growth (%)", path: "assumptions.growthPct", value: state.assumptions.growthPct, type: "number" }),
     fieldTemplate({ label: "CPU cores per host", path: "assumptions.hostCores", value: state.assumptions.hostCores, type: "number" }),
     fieldTemplate({ label: "RAM per host (GB)", path: "assumptions.hostRam", value: state.assumptions.hostRam, type: "number" }),
-    fieldTemplate({ label: "CPU oversubscription", path: "assumptions.cpuOversub", value: state.assumptions.cpuOversub, type: "number" }),
-    fieldTemplate({ label: "Memory oversubscription", path: "assumptions.ramOversub", value: state.assumptions.ramOversub, type: "number" }),
+    fieldTemplate({ label: "CPU oversubscription", path: "assumptions.cpuOversub", value: state.assumptions.cpuOversub, type: "number", description: DESCRIPTIONS.cpuOversubscription }),
+    fieldTemplate({ label: "Memory oversubscription", path: "assumptions.ramOversub", value: state.assumptions.ramOversub, type: "number", description: DESCRIPTIONS.memoryOversubscription }),
     fieldTemplate({ label: "Primary storage type", path: "assumptions.storageType", value: state.assumptions.storageType, type: "select", options: OPTIONS.storageTypes, note: "Used for host minimums and storage overhead." }),
   ].join("");
 }
@@ -767,7 +804,7 @@ function renderProfile(warnings) {
   elements.profileForm.innerHTML = [
     fieldTemplate({ label: "Instance model", path: "instance.model", value: state.instance.model, type: "select", options: OPTIONS.instanceModels }),
     fieldTemplate({ label: "Availability model", path: "instance.deploymentModel", value: state.instance.deploymentModel, type: "select", options: OPTIONS.deploymentModels }),
-    fieldTemplate({ label: "VCF profile size", path: "instance.deploymentSize", value: state.instance.deploymentSize, type: "select", options: OPTIONS.deploymentSizes }),
+    fieldTemplate({ label: "VCF profile size", path: "instance.deploymentSize", value: state.instance.deploymentSize, type: "select", options: OPTIONS.deploymentSizes, description: DESCRIPTIONS.vcfProfileSize }),
   ].join("");
 
   elements.warningList.innerHTML = warnings.length
@@ -845,6 +882,7 @@ function renderManagement() {
       value: state.management.sspSize,
       type: "select",
       options: OPTIONS.sspSizes,
+      description: DESCRIPTIONS.managementSsp,
     }),
   ].join("");
 }
@@ -857,8 +895,8 @@ function renderServices() {
     fieldTemplate({ label: "Log Management size", path: "services.logManagement", value: state.services.logManagement, type: "select", options: OPTIONS.logsSizes }),
     fieldTemplate({ label: "Log replicas", path: "services.logReplicas", value: state.services.logReplicas, type: "number", note: "Used when Log Management is enabled." }),
     fieldTemplate({ label: "VCF Operations for networks", path: "services.networkOperations", value: state.services.networkOperations, type: "select", options: OPTIONS.logsSizes }),
-    fieldTemplate({ label: "Real-time metrics", path: "services.realTimeMetrics", value: state.services.realTimeMetrics, type: "select", options: OPTIONS.includeExclude }),
-    fieldTemplate({ label: "Software Depot (additional instance)", path: "services.softwareDepot", value: state.services.softwareDepot, type: "select", options: OPTIONS.includeExclude }),
+    fieldTemplate({ label: "Real-time metrics", path: "services.realTimeMetrics", value: state.services.realTimeMetrics, type: "select", options: OPTIONS.includeExclude, description: DESCRIPTIONS.realTimeMetrics }),
+    fieldTemplate({ label: "Software Depot (additional instance)", path: "services.softwareDepot", value: state.services.softwareDepot, type: "select", options: OPTIONS.includeExclude, description: DESCRIPTIONS.softwareDepot }),
     fieldTemplate({ label: "Identity Broker (additional instance)", path: "services.identityBroker", value: state.services.identityBroker, type: "select", options: OPTIONS.includeExclude }),
   ].join("");
 }
@@ -916,8 +954,8 @@ function renderResults(result) {
     { label: "CPU per host (N-1)", value: `${formatNumber(result.hostSummary.cpuPerHost)} CPUs` },
     { label: "Memory per host (N-1)", value: formatGb(result.hostSummary.ramPerHost) },
     { label: "Virtual Machine Capacity Requirements", value: formatGb(result.hostSummary.vmCapacity) },
-    { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile) },
-    { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage) },
+    { label: "Swap File Requirements", value: formatGb(result.hostSummary.swapFile), description: DESCRIPTIONS.swapFile },
+    { label: "Interim Total (VM Capacity + Swap File)", value: formatGb(result.hostSummary.interimStorage), description: DESCRIPTIONS.interimStorage },
     { label: "Allow for Redundancy based on FTT1", value: formatGb(result.hostSummary.redundantStorage) },
     { label: "Allow for Host Rebuild and Operations Reserve", value: formatGb(result.hostSummary.reservedStorage) },
     { label: "Allow for Estimated Growth", value: formatGb(result.hostSummary.growthStorage) },
@@ -926,7 +964,7 @@ function renderResults(result) {
     .map(
       (item) => `
         <div class="summary-item">
-          <span>${item.label}</span>
+          ${infoLabel(item.label, item.description)}
           <strong>${item.value}</strong>
         </div>
       `,
@@ -1026,6 +1064,38 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const infoButton = target.closest('[data-action="toggle-info"]');
+  if (infoButton instanceof HTMLButtonElement) {
+    const popover = infoButton.parentElement?.querySelector(".info-popover");
+    const willOpen = popover?.hidden ?? false;
+
+    document.querySelectorAll(".info-popover").forEach((item) => {
+      item.hidden = true;
+    });
+    document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+
+    if (popover && willOpen) {
+      popover.classList.remove("align-right");
+      popover.hidden = false;
+      if (popover.getBoundingClientRect().right > document.documentElement.clientWidth - 8) {
+        popover.classList.add("align-right");
+      }
+      infoButton.setAttribute("aria-expanded", "true");
+    }
+    return;
+  }
+
+  if (!target.closest(".info-popover")) {
+    document.querySelectorAll(".info-popover").forEach((item) => {
+      item.hidden = true;
+    });
+    document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
   const action = target.dataset.action;
   if (action === "remove-domain") {
     const index = Number(target.dataset.index);
@@ -1037,6 +1107,19 @@ document.addEventListener("click", (event) => {
       render();
     }
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  document.querySelectorAll(".info-popover").forEach((item) => {
+    item.hidden = true;
+  });
+  document.querySelectorAll('[data-action="toggle-info"]').forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
 });
 
 elements.addDomainButton.addEventListener("click", () => {
