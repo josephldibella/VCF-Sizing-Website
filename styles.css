@@ -35,6 +35,15 @@ select {
   font: inherit;
 }
 
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  border-color: #dfe5ec;
+  background: #eef1f5;
+  color: #7b8796;
+  opacity: 1;
+}
+
 button,
 input,
 select {

@@ -41,6 +41,9 @@ const OPTIONS = {
   aviSizes: ["Excluded", "Small", "Large", "X-Large"],
   protectionModes: ["Exclude", "Management Only", "Management & Workload", "Workload Only"],
   srmSizes: ["Light", "Standard"],
+  vcfOperationsSizes: ["Extra Small", "Small", "Medium", "Large", "Extra Large"],
+  cloudProxySizes: ["Small", "Standard"],
+  vcfAutomationSizes: ["Exclude", "Small", "Medium", "Large"],
 };
 
 const elements = {
@@ -88,9 +91,11 @@ function createDefaultState() {
       gmSize: "Excluded",
       aviSize: "Excluded",
       sspSize: "Excluded",
+      vcfOperationsSize: "Large",
+      cloudProxySize: "Standard",
     },
     services: {
-      vcfAutomation: "Exclude",
+      vcfAutomationSize: "Exclude",
       logManagement: "Exclude",
       logReplicas: 3,
       networkOperations: "Exclude",
@@ -174,6 +179,27 @@ function currentManagementProfile() {
     ...state.management,
     ...recommendedManagementProfile(),
   };
+}
+
+function recommendedCoreServiceSizes() {
+  return {
+    vcfOperationsSize: window.VCF_CORE_SERVICES.recommendedVcfOperationsSize({
+      deploymentModel: state.instance.deploymentModel,
+      deploymentSize: state.instance.deploymentSize,
+    }),
+    cloudProxySize: window.VCF_CORE_SERVICES.recommendedCloudProxySize({
+      deploymentSize: state.instance.deploymentSize,
+    }),
+  };
+}
+
+function currentCoreServiceSizes() {
+  return state.management.customProfile
+    ? {
+        vcfOperationsSize: state.management.vcfOperationsSize,
+        cloudProxySize: state.management.cloudProxySize,
+      }
+    : recommendedCoreServiceSizes();
 }
 
 function lookup(tableName, key) {
@@ -270,6 +296,7 @@ function calculate() {
     instanceModel: state.instance.model,
     deploymentModel: state.instance.deploymentModel,
   });
+  const coreServiceSizes = currentCoreServiceSizes();
   const selectedDomains = selectedWorkloadDomains();
   const protection = protectionFlags();
 
@@ -286,7 +313,7 @@ function calculate() {
 
   if (
     state.instance.model === "Additional Instance" &&
-    services.vcfAutomation === "Include"
+    services.vcfAutomationSize !== "Exclude"
   ) {
     warnings.push("VCF Automation should remain excluded for an additional instance.");
   }
@@ -526,13 +553,7 @@ function calculate() {
   let vcfOpsApplianceSize = null;
   if (requiredServices.vcfOperations) {
     vcfOpsNodes = deploymentModel === "High Availability" ? 3 : deploymentModel === "Simple" ? 1 : 0;
-    if (deploymentModel === "High Availability" && profileSize === "Medium") {
-      vcfOpsApplianceSize = "Large";
-    } else if (deploymentModel === "High Availability" && profileSize === "Large") {
-      vcfOpsApplianceSize = "Extra Large";
-    } else {
-      vcfOpsApplianceSize = profileSize;
-    }
+    vcfOpsApplianceSize = coreServiceSizes.vcfOperationsSize;
   }
   rows.push(
     component(
@@ -545,33 +566,32 @@ function calculate() {
   );
 
   const cloudProxyNodes = requiredServices.cloudProxy ? 1 : 0;
+  const cloudProxyLookupSize = window.VCF_CORE_SERVICES.cloudProxyLookupSize(
+    coreServiceSizes.cloudProxySize,
+  );
   rows.push(
     component(
       "Cloud Proxy",
       cloudProxyNodes,
-      cloudProxyNodes ? lookup("table_vcfo_p_cpu", profileSize) : 0,
-      cloudProxyNodes ? lookup("table_vcfo_p_ram", profileSize) : 0,
-      cloudProxyNodes ? lookup("table_vcfo_p_disk", profileSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_cpu", cloudProxyLookupSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_ram", cloudProxyLookupSize) : 0,
+      cloudProxyNodes ? lookup("table_vcfo_p_disk", cloudProxyLookupSize) : 0,
     ),
   );
 
   const licenseServerNodes = requiredServices.vcfOperations ? 1 : 0;
   rows.push(component("License Server", licenseServerNodes, licenseServerNodes * 2, licenseServerNodes * 4, licenseServerNodes * 12));
 
-  const automationNodes = services.vcfAutomation === "Include"
-    ? deploymentModel === "High Availability"
-      ? 3
-      : deploymentModel === "Simple"
-        ? 1
-        : 0
-    : 0;
+  const automationNodes = window.VCF_CORE_SERVICES.vcfAutomationNodeCount(
+    services.vcfAutomationSize,
+  );
   rows.push(
     component(
       "VCF Automation",
       automationNodes,
-      automationNodes ? lookup("table_vcfa_appliance_cpu", profileSize) * automationNodes : 0,
-      automationNodes ? lookup("table_vcfa_appliance_ram", profileSize) * automationNodes : 0,
-      automationNodes ? lookup("table_vcfa_appliance_disk", profileSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_cpu", services.vcfAutomationSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_ram", services.vcfAutomationSize) * automationNodes : 0,
+      automationNodes ? lookup("table_vcfa_appliance_disk", services.vcfAutomationSize) * automationNodes : 0,
     ),
   );
 
@@ -755,7 +775,7 @@ function infoLabel(label, description = "") {
   `;
 }
 
-function fieldTemplate({ label, path, value, type = "text", options = [], note = "", description = "" }) {
+function fieldTemplate({ label, path, value, type = "text", options = [], note = "", description = "", disabled = false }) {
   if (type === "status") {
     return `
       <div class="field">
@@ -770,7 +790,7 @@ function fieldTemplate({ label, path, value, type = "text", options = [], note =
     return `
       <div class="field">
         <div class="field-label">${infoLabel(label, description)}</div>
-        <select aria-label="${label}" data-path="${path}" data-type="text">
+        <select aria-label="${label}" data-path="${path}" data-type="text" ${disabled ? "disabled" : ""}>
           ${options
             .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
             .join("")}
@@ -829,31 +849,44 @@ function renderProfile(warnings) {
 function renderManagement() {
   const recommended = recommendedManagementProfile();
   const profile = currentManagementProfile();
+  const coreServiceSizes = currentCoreServiceSizes();
+  const profileLocked = !state.management.customProfile;
   const requiredServices = window.VCF_CORE_SERVICES.requiredCoreServices({
     instanceModel: state.instance.model,
     deploymentModel: state.instance.deploymentModel,
   });
   const deploymentExcluded = state.instance.deploymentModel === "Exclude";
   elements.managementForm.innerHTML = [
+    requiredServices.vcfOperations
+      ? fieldTemplate({
+          label: "VCF Operations size",
+          path: "management.vcfOperationsSize",
+          value: coreServiceSizes.vcfOperationsSize,
+          type: "select",
+          options: OPTIONS.vcfOperationsSizes,
+          disabled: profileLocked,
+          note: profileLocked ? `Profile default: ${coreServiceSizes.vcfOperationsSize}` : "Required for the first VCF instance.",
+        })
+      : fieldTemplate({
+          label: "VCF Operations",
+          value: deploymentExcluded ? "Not sized" : "Uses fleet VCF Operations",
+          type: "status",
+          note: deploymentExcluded
+            ? "Select a deployment model to size the required core services."
+            : "Additional instances connect to the VCF Operations deployment for the existing fleet.",
+        }),
     fieldTemplate({
-      label: "VCF Operations",
-      value: deploymentExcluded
-        ? "Not sized"
-        : requiredServices.vcfOperations
-          ? "Included - Required"
-          : "Uses fleet VCF Operations",
-      type: "status",
-      note: deploymentExcluded
-        ? "Select a deployment model to size the required core services."
-        : requiredServices.vcfOperations
-          ? "A new VCF Operations deployment is included with the first VCF instance."
-          : "Additional instances connect to the VCF Operations deployment for the existing fleet.",
-    }),
-    fieldTemplate({
-      label: "Cloud Proxy",
-      value: requiredServices.cloudProxy ? "Included - Required" : "Not sized",
-      type: "status",
-      note: "Each deployed VCF instance requires a Cloud Proxy for data collection and management services.",
+      label: "Cloud Proxy size",
+      path: "management.cloudProxySize",
+      value: coreServiceSizes.cloudProxySize,
+      type: "select",
+      options: OPTIONS.cloudProxySizes,
+      disabled: profileLocked || !requiredServices.cloudProxy,
+      note: requiredServices.cloudProxy
+        ? profileLocked
+          ? `Profile default: ${coreServiceSizes.cloudProxySize}`
+          : "Required for each deployed VCF instance."
+        : "Select a deployment model to size the required Cloud Proxy.",
     }),
     fieldTemplate({
       label: "Customize management profile",
@@ -868,6 +901,7 @@ function renderManagement() {
       value: profile.vcenterSize,
       type: "select",
       options: LOOKUPS.lists.sizing_vcenter_appliance_size_list,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.vcenterSize}`,
     }),
     fieldTemplate({
@@ -876,6 +910,7 @@ function renderManagement() {
       value: profile.vcenterStorage,
       type: "select",
       options: OPTIONS.vcenterStorageSizes,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.vcenterStorage}`,
     }),
     fieldTemplate({
@@ -884,6 +919,7 @@ function renderManagement() {
       value: profile.nsxModel,
       type: "select",
       options: OPTIONS.mgmtNsxModels,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.nsxModel}`,
     }),
     fieldTemplate({
@@ -892,6 +928,7 @@ function renderManagement() {
       value: profile.nsxSize,
       type: "select",
       options: LOOKUPS.lists.sizing_nsxt_manager_size_list,
+      disabled: profileLocked,
       note: state.management.customProfile ? "" : `Recommended: ${recommended.nsxSize}`,
     }),
     fieldTemplate({
@@ -901,6 +938,7 @@ function renderManagement() {
       type: "select",
       options: LOOKUPS.lists.sizing_nsxt_edge_sizing_list,
       description: DESCRIPTIONS.nsxEdgeOrVna,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "NSX global manager size",
@@ -909,6 +947,7 @@ function renderManagement() {
       type: "select",
       options: OPTIONS.gmOptions,
       description: DESCRIPTIONS.nsxGlobalManager,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "Management AVI load balancer",
@@ -916,6 +955,7 @@ function renderManagement() {
       value: state.management.aviSize,
       type: "select",
       options: OPTIONS.aviSizes,
+      disabled: profileLocked,
     }),
     fieldTemplate({
       label: "Management SSP size",
@@ -924,13 +964,14 @@ function renderManagement() {
       type: "select",
       options: OPTIONS.sspSizes,
       description: DESCRIPTIONS.managementSsp,
+      disabled: profileLocked,
     }),
   ].join("");
 }
 
 function renderServices() {
   elements.servicesForm.innerHTML = [
-    fieldTemplate({ label: "VCF Automation", path: "services.vcfAutomation", value: state.services.vcfAutomation, type: "select", options: OPTIONS.includeExclude }),
+    fieldTemplate({ label: "VCF Automation size", path: "services.vcfAutomationSize", value: state.services.vcfAutomationSize, type: "select", options: OPTIONS.vcfAutomationSizes }),
     fieldTemplate({ label: "Log Management size", path: "services.logManagement", value: state.services.logManagement, type: "select", options: OPTIONS.logsSizes }),
     fieldTemplate({ label: "Log replicas", path: "services.logReplicas", value: state.services.logReplicas, type: "number", note: "Used when Log Management is enabled." }),
     fieldTemplate({ label: "VCF Operations for networks", path: "services.networkOperations", value: state.services.networkOperations, type: "select", options: OPTIONS.logsSizes }),
@@ -1092,6 +1133,10 @@ document.addEventListener("change", (event) => {
   const rawValue = target instanceof HTMLInputElement && target.type === "checkbox"
     ? target.checked
     : target.value;
+
+  if (path === "management.customProfile" && rawValue === true) {
+    Object.assign(state.management, recommendedManagementProfile(), recommendedCoreServiceSizes());
+  }
 
   setNestedValue(path, rawValue, type);
   render();
